@@ -70,4 +70,4 @@ The latest update focuses on richer presentation, a clearer configuration experi
 3) Talk to an NPC and watch the new “thinking” animation while responses are generated.
 
 ### Compatibility
-The plugin has been tested on Paper and Spigot 1.20.2. Requires Citizens.
+The plugin has been tested on Paper and Spigot 1.21.8. Requires Citizens.
