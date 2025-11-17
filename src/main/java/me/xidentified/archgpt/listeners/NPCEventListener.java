@@ -62,8 +62,31 @@ public class NPCEventListener implements Listener {
         }
     }
 
+    // Dynamic priority routing: register handlers at all priorities but only act on the configured one
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
+    public void onPlayerChatLowest(AsyncPlayerChatEvent event) { handlePlayerChat(event, EventPriority.LOWEST); }
+
+    @EventHandler(priority = EventPriority.LOW)
+    public void onPlayerChatLow(AsyncPlayerChatEvent event) { handlePlayerChat(event, EventPriority.LOW); }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onPlayerChatNormal(AsyncPlayerChatEvent event) { handlePlayerChat(event, EventPriority.NORMAL); }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onPlayerChatHigh(AsyncPlayerChatEvent event) { handlePlayerChat(event, EventPriority.HIGH); }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerChatHighest(AsyncPlayerChatEvent event) { handlePlayerChat(event, EventPriority.HIGHEST); }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerChatMonitor(AsyncPlayerChatEvent event) { handlePlayerChat(event, EventPriority.MONITOR); }
+
+    private void handlePlayerChat(AsyncPlayerChatEvent event, EventPriority firedAt) {
+        // Only run if this handler's priority matches the configured one
+        if (configHandler.getChatListenerPriority() != firedAt) {
+            return;
+        }
+
         synchronized (conversationManager.npcChatStatesCache) {
             Player player = event.getPlayer();
             UUID playerUUID = player.getUniqueId();

@@ -42,7 +42,8 @@ public class HologramManager {
     public void showInteractionHologram(NPC npc, Player player) {
         // if (!player.hasPlayedBefore) {
         String hologramText = plugin.getConfig().getString("conversation_start_popup");
-        if (hologramText != null) {
+        // Only show if configured and non-empty (empty disables per config.yml guidance)
+        if (hologramText != null && !hologramText.isEmpty()) {
             Location hologramLocation = getHologramLocation(npc.getEntity().getLocation());
             UUID playerUUID = player.getUniqueId();
 

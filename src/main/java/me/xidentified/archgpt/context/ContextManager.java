@@ -44,6 +44,12 @@ public class ContextManager {
             context.addProperty("npc", npc.getName());
             context.addProperty("npc_id", npc.getId());
             
+            // Add server knowledge from config (rules, staff, FAQs, etc.)
+            String knowledge = plugin.getConfigHandler().getKnowledge();
+            if (knowledge != null && !knowledge.isBlank()) {
+                context.addProperty("knowledge", knowledge);
+            }
+            
             // Add request type
             context.addProperty("request_type", requestType.name());
             

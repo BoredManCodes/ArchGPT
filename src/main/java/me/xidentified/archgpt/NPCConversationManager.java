@@ -13,6 +13,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.*;
@@ -31,6 +32,7 @@ public class NPCConversationManager {
     public final Map<UUID, NPC> playerNPCMap = new ConcurrentHashMap<>(); //Stores the NPC the player is talking to
     public final ConcurrentHashMap<UUID, List<JsonObject>> npcChatStatesCache;
     private final ConcurrentHashMap<UUID, Long> playerCooldowns; //Stores if the player is in a cooldown, which would cancel their sent message
+    private final Map<UUID, BukkitTask> npcThinkingTasks = new ConcurrentHashMap<>(); // Repeating tasks to animate NPC while thinking
 
     public NPCConversationManager(ArchGPT plugin, ArchGPTConfig configHandler) {
         this.plugin = plugin;
@@ -66,8 +68,21 @@ public class NPCConversationManager {
 
     public CompletableFuture<String> getGreeting(Player player, NPC npc) {
         // Use the new MCP approach instead of building the request manually
-        String greetingPrompt = "A player known as " + player.getName() + " approaches you. " +
-                "Give them a greeting consisting of 40 completion_tokens or less.";
+        // Pull NPC-specific prompt from config (falls back to default if not configured)
+        String npcPrompt = configHandler.getNpcPrompt(npc.getName(), player);
+        if (npcPrompt == null || npcPrompt.isBlank()) {
+            npcPrompt = configHandler.getDefaultPrompt();
+        }
+
+        // Respect max response length from config
+        int maxTokens = configHandler.getMaxResponseLength();
+
+        // Build the final greeting instruction, ensuring the configured prompt is used
+        String greetingPrompt = npcPrompt + "\n" +
+                "A player known as " + player.getName() + " approaches you. " +
+                "Greet them naturally in-character, and by name. Keep it under " + maxTokens + " completion_tokens. Tell them to right click on you to continue this conversation.";
+
+        plugin.debugLog("Using greeting prompt for NPC '" + npc.getName() + "': " + greetingPrompt);
         
         return getChatRequestHandler().processMCPRequest(
             player, npc, greetingPrompt, 
@@ -96,9 +111,6 @@ public class NPCConversationManager {
         // Send player message
         conversationUtils.sendPlayerMessage(player, playerMessage);
 
-        // Start animation over NPC head while it processes response
-        displayHologramOverNPC(playerUUID, npc, hologramManager);
-
         // Cooldown logic
         long currentTimeMillis = System.currentTimeMillis();
         if (playerCooldowns.containsKey(playerUUID)) {
@@ -109,6 +121,12 @@ public class NPCConversationManager {
             }
         }
         playerCooldowns.put(playerUUID, currentTimeMillis);
+
+        // Start animation over NPC head while it processes response
+        displayHologramOverNPC(playerUUID, npc, hologramManager);
+
+        // Start a simple NPC animation (crouch/uncrouch and hand swing) while generating a response
+        startNpcThinkingAnimation(playerUUID, npc);
 
         // Process chat request
         List<JsonObject> conversationState = npcChatStatesCache.get(playerUUID);
@@ -167,6 +185,12 @@ public class NPCConversationManager {
 
         conversationTimeoutManager.cancelConversationTimeout(playerUUID);
         plugin.getHologramManager().removePlayerHologram(playerUUID);
+
+        // Stop any ongoing NPC thinking animation for this player
+        NPC npc = playerNPCMap.get(playerUUID);
+        if (npc != null) {
+            stopNpcThinkingAnimation(playerUUID, npc);
+        }
     }
 
     public boolean handleCancelCommand(Player player, String message) {
@@ -231,6 +255,9 @@ public class NPCConversationManager {
                                         }
 
                                         hologramManager.removePlayerHologram(playerUUID);
+
+                                        // Stop the NPC thinking animation once we have a response
+                                        stopNpcThinkingAnimation(playerUUID, npc);
                                     }
                                 }
                             }.runTaskLater(plugin, 20L);
@@ -240,6 +267,66 @@ public class NPCConversationManager {
                 }
             }
         });
+    }
+
+    // Starts a repeating task that makes the NPC crouch/uncrouch and swing their hand while "thinking"
+    private void startNpcThinkingAnimation(UUID playerUUID, NPC npc) {
+        try {
+            if (npc == null || !npc.isSpawned()) return;
+
+            // If there's already a task running for this player, cancel it first
+            stopNpcThinkingAnimation(playerUUID, npc);
+
+            BukkitTask task = new BukkitRunnable() {
+                private boolean sneaking = false;
+                private int ticks = 0;
+
+                @Override
+                public void run() {
+                    if (npc == null || !npc.isSpawned()) {
+                        cancel();
+                        return;
+                    }
+
+                    // Toggle sneak every 10 ticks
+                    sneaking = !sneaking;
+                    if (npc.getEntity() instanceof org.bukkit.entity.Player npcPlayer) {
+                        npcPlayer.setSneaking(sneaking);
+                        // Occasionally swing hand for a bit more life
+                        if (ticks % 3 == 0) {
+                            npcPlayer.swingMainHand();
+                        }
+                    } else if (npc.getEntity() instanceof org.bukkit.entity.LivingEntity living) {
+                        // Some entities support swing animation too
+                        try {
+                            living.swingMainHand();
+                        } catch (NoSuchMethodError ignored) {
+                            // Older API versions may not support this; ignore
+                        }
+                    }
+                    ticks++;
+                }
+            }.runTaskTimer(plugin, 0L, 10L); // every 10 ticks (0.5s)
+
+            npcThinkingTasks.put(playerUUID, task);
+        } catch (Throwable t) {
+            plugin.getLogger().warning("Failed to start NPC thinking animation: " + t.getMessage());
+        }
+    }
+
+    // Stops the repeating animation task and ensures the NPC is not left sneaking
+    private void stopNpcThinkingAnimation(UUID playerUUID, NPC npc) {
+        try {
+            BukkitTask existing = npcThinkingTasks.remove(playerUUID);
+            if (existing != null) {
+                existing.cancel();
+            }
+            if (npc != null && npc.isSpawned() && npc.getEntity() instanceof org.bukkit.entity.Player npcPlayer) {
+                npcPlayer.setSneaking(false);
+            }
+        } catch (Throwable t) {
+            plugin.getLogger().warning("Failed to stop NPC thinking animation: " + t.getMessage());
+        }
     }
 
     public boolean playerInConversation(UUID playerUUID) {

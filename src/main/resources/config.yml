@@ -1,32 +1,124 @@
 # Made by xIdentified - https://discord.gg/emDFbsKNV4
 # To edit chat colors, go to lang/styles.yml
 
+# ============================================================================
+# CORE MODE & PROVIDER
+# ----------------------------------------------------------------------------
+# - debug_mode: extra logging to console
+# - use_mcp: when true, send requests to your MCP server. When false, call OpenAI
+#   directly using the credentials below.
+# ============================================================================
 debug_mode: false
+use_mcp: true  # true = use MCP server, false = call OpenAI directly
 
+# ============================================================================
+# OPENAI DIRECT MODE (only used when use_mcp: false)
+# ----------------------------------------------------------------------------
+# Provide your OpenAI credentials and model here if not using MCP.
+# Keep your api_key private. The engine should be a valid Chat Completions model.
+# ============================================================================
+api_key: ""
+chatgpt_engine: gpt-3.5-turbo-1106 # The OpenAI GPT engine to use when use_mcp is false
+max_response_length: 200 # Maximum length of response (in tokens)
+
+# ============================================================================
+# MCP SERVER SETTINGS (only used when use_mcp: true)
+# ----------------------------------------------------------------------------
+# Configure your local or remote MCP broker. "provider" is informational.
+# ============================================================================
 mcp:
   server_url: "http://localhost:3000/query"
   provider: "openai"
   model: "gpt-3.5-turbo"
   max_tokens: 200
 
+# ============================================================================
+# CHAT BEHAVIOR & TIMING
+# ----------------------------------------------------------------------------
+# - response_timeout: ms before a conversation attempt times out
+# - min_char_length: minimum characters required in a player message to be sent
+# - chat_cooldown: ms cooldown between messages from the same player
+# - chat_listener_priority: control when ArchGPT intercepts chat vs other plugins
+# ============================================================================
 # Time (in milliseconds) before the conversation times out
 response_timeout: 60000
 # Minimum characters in outgoing player message
 min_char_length: 10
 # Cooldown duration in milliseconds (e.g., 3000 milliseconds = 3 seconds)
 chat_cooldown: 3000
+# Chat listener priority (controls when ArchGPT intercepts player chat)
+# Options: LOWEST, LOW, NORMAL, HIGH, HIGHEST, MONITOR
+# If you use chat plugins like VentureChat, try HIGH or HIGHEST.
+chat_listener_priority: LOWEST
 
+# ============================================================================
+# TRANSLATION
+# ----------------------------------------------------------------------------
+# - use-player-client-locale: adapt plugin messages and AI responses to player locale
+# - default-locale: fallback for plugin messages
+# - libre_endpoint: used to translate ChatGPT responses when needed
+# ============================================================================
+translation:
+  use-player-client-locale: true  # Use player locale for plugin messages and ChatGPT response language
+  default-locale: "en" # For plugin messages
+  libre_endpoint: 'https://libretranslate.de' # For ChatGPT responses
+
+# ============================================================================
+# PROMPTS & KNOWLEDGE
+# ----------------------------------------------------------------------------
+# default_prompt: sent with each request (keep concise; applies to all NPCs)
+# knowledge: long-form knowledge available to NPCs (rules, lore, staff, FAQs)
+# Choose ONE of the formats below for knowledge and delete the others.
+# ============================================================================
 # The default prompt your ChatGPT responses will be based off of. What's set here will apply to all NPCs.
 # Useful for setting context like, "this server has custom enchantments" or "you can claim land by xyz"
 # Be mindful of how long this is, as it will be sent to the API each time.
 default_prompt: "You live in a server called CarrotCraft. You like to eat carrots. Mmm, carrots."
 
+# Long-form knowledge that should always be available to NPCs (server rules, lore, staff, FAQs, etc.)
+# You can provide this in multiple ways. Pick ONE format you like and delete the others.
+# 1) Single multiline block string (simple and fast):
+# knowledge: |
+#   RULES
+#   1) Be respectful. 2) No griefing. 3) No cheating.
+#   STAFF
+#   - Owner: Alice (UTC)
+#   - Admins: Bob, Carol
+#   HOW TO START
+#   Use /rtp to find a place, claim land with /claim, visit spawn at 0 64 0.
+#
+# 2) As a list of strings (will be concatenated):
+# knowledge:
+#   - "Rule 1: Be respectful."
+#   - "Rule 2: No griefing."
+#   - "Staff: Owner Alice; Admins Bob & Carol"
+#
+# 3) As a structured section (keys with strings or string lists):
+# knowledge:
+#   rules: |
+#     1) Be respectful.
+#     2) No griefing.
+#   staff:
+#     - Owner: Alice
+#     - Admins: Bob, Carol
+#   faq:
+#     getting_started: |
+#       Use /spawn, then /rtp to explore. Claim with /claim.
+knowledge: ""  # Default empty; fill using one of the formats above
+
+# ============================================================================
+# NPC-SPECIFIC PROMPTS
+# ----------------------------------------------------------------------------
 # Replace 'npc_name' with the name of the NPC (as used in Citizens) and place your prompt in quotes.
+# ============================================================================
 npcs:
   npc_name: "This is an example prompt for the NPC."
 
-# Gives your NPCs more accurate context to their location in the world, I recommend adding landmarks like
-# spawn, towns, any places you want players to go like a public mine, dungeons, etc.
+# ============================================================================
+# WORLD CONTEXT: POINTS OF INTEREST
+# ----------------------------------------------------------------------------
+# Give NPCs coordinates of notable locations (spawn, towns, mines, dungeons, etc.)
+# ============================================================================
 points_of_interest:
   world:
     Spawn: "0,64,0"
@@ -35,15 +127,24 @@ points_of_interest:
   world_nether:
     Castle: "75,80,-100"
 
-# Optionally split NPC responses, so they don't send as paragraphs
+# ============================================================================
+# MESSAGE PRESENTATION & CONVERSATION FLOW
+# ----------------------------------------------------------------------------
+# - split_long_messages: split responses into smaller messages instead of big paragraphs
+# - conversation_start_popup: on-screen hint to talk to NPCs (empty to disable)
+# - conversation_end_phrase: phrase players can say to end a conversation
+# - npc_memory_duration: how long NPCs remember conversations (1d, 1w, 1m, etc.)
+# ============================================================================
 split_long_messages: false
-# Popup dialogue that prompts player to begin conversation. Leave empty to disable.
-conversation_start_popup: "Right-click to talk"
-# Phrase to end conversations with.
+conversation_start_popup: "Right-click to talk"  # Leave empty to disable
 conversation_end_phrase: "cancel"
-# Time (in Minecraft days) NPCs will remember conversations. Format: 1d, 1w, 1m etc.
 npc_memory_duration: 7d
 
+# ============================================================================
+# STORAGE
+# ----------------------------------------------------------------------------
+# Choose where conversations and reports are stored. For MySQL, configure credentials.
+# ============================================================================
 storage:
   type: 'sqlite' # Options: sqlite, mysql
   mysql:
@@ -52,8 +153,3 @@ storage:
     database: 'archgpt'
     username: 'root'
     password: 'password'
-
-translation:
-  use-player-client-locale: true  # Use player locale for plugin messages and ChatGPT response language
-  default-locale: "en" # For plugin messages
-  libre_endpoint: 'https://libretranslate.de' # For ChatGPT responses
