@@ -3,6 +3,7 @@ package me.xidentified.archgpt.utils;
 import me.xidentified.archgpt.ArchGPT;
 import me.xidentified.archgpt.ArchGPTConfig;
 import me.xidentified.archgpt.NPCConversationManager;
+import me.xidentified.archgpt.events.NPCToPlayerMessageEvent;
 import me.xidentified.archgpt.context.EnvironmentalContextProvider;
 import me.xidentified.archgpt.context.PlayerContextProvider;
 import me.xidentified.archgpt.storage.model.Report;
@@ -138,6 +139,17 @@ public class ConversationUtils {
     }
 
     private void sendMessageFormatted(Player player, NPC npc, String message) {
+        // Fire event before sending the message to the player
+        Location npcLocation = null;
+        try {
+            if (npc != null && npc.isSpawned() && npc.getEntity() != null) {
+                npcLocation = npc.getEntity().getLocation();
+            }
+        } catch (Throwable ignored) {}
+
+        NPCToPlayerMessageEvent event = new NPCToPlayerMessageEvent(player, message, npc == null ? "Unknown" : npc.getName(), npcLocation);
+        org.bukkit.Bukkit.getPluginManager().callEvent(event);
+
         // Prepare and send formatted NPC message
         plugin.sendMessage(player, Messages.GENERAL_NPC_MESSAGE
                 .insertObject("npc", npc)

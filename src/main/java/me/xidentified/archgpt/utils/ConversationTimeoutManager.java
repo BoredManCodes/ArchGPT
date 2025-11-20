@@ -18,7 +18,12 @@ public class ConversationTimeoutManager {
     }
 
     public void startConversationTimeout(UUID playerUUID) {
-        plugin.debugLog("Conversation timeout started for " + playerUUID);
+        String playerName = null;
+        try {
+            org.bukkit.entity.Player p = plugin.getServer().getPlayer(playerUUID);
+            if (p != null) playerName = p.getName();
+        } catch (Throwable ignored) {}
+        plugin.debugLog("Conversation timeout started for " + (playerName != null ? playerName : playerUUID));
 
         // Get the timeout duration from the configuration
         long conversationTimeoutMillis = plugin.getConfigHandler().getNpcChatTimeoutMillis();
@@ -45,13 +50,23 @@ public class ConversationTimeoutManager {
     }
 
     public void resetConversationTimeout(UUID playerUUID) {
-        plugin.debugLog("Conversation Timer reset for " + playerUUID);
+        String playerName = null;
+        try {
+            org.bukkit.entity.Player p = plugin.getServer().getPlayer(playerUUID);
+            if (p != null) playerName = p.getName();
+        } catch (Throwable ignored) {}
+        plugin.debugLog("Conversation Timer reset for " + (playerName != null ? playerName : playerUUID));
         cancelConversationTimeout(playerUUID);
         startConversationTimeout(playerUUID);
     }
 
     public void cancelConversationTimeout(UUID playerUUID) {
-        plugin.debugLog("Player " + playerUUID + " canceled the conversation");
+        String playerName = null;
+        try {
+            org.bukkit.entity.Player p = plugin.getServer().getPlayer(playerUUID);
+            if (p != null) playerName = p.getName();
+        } catch (Throwable ignored) {}
+        plugin.debugLog("Player " + (playerName != null ? playerName : playerUUID) + " canceled the conversation");
 
         // Get the existing conversation timeout task for the player
         synchronized (plugin.getNpcChatStatesCache()) {

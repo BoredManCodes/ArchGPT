@@ -2,6 +2,7 @@ package me.xidentified.archgpt;
 
 import lombok.Getter;
 import me.xidentified.archgpt.context.MemoryContext;
+import me.xidentified.archgpt.events.PlayerToNPCMessageEvent;
 import me.xidentified.archgpt.storage.model.Conversation;
 import me.xidentified.archgpt.utils.*;
 import net.citizensnpcs.api.npc.NPC;
@@ -111,6 +112,27 @@ public class NPCConversationManager {
         // Send player message
         conversationUtils.sendPlayerMessage(player, playerMessage);
 
+        // Log the player's message to console using player name (not UUID)
+        try {
+            String npcNameForLog = "Unknown";
+            if (npc != null) {
+                npcNameForLog = npc.getName();
+            }
+            String plainPlayerMsg = PlainTextComponentSerializer.plainText().serialize(playerMessage);
+            plugin.debugLog("Player -> NPC | " + player.getName() + " -> " + npcNameForLog + ": " + plainPlayerMsg);
+        } catch (Throwable ignored) {}
+
+        // Fire event for player -> NPC message
+        try {
+            Location npcLocation = null;
+            if (npc != null && npc.isSpawned() && npc.getEntity() != null) {
+                npcLocation = npc.getEntity().getLocation();
+            }
+            String messageText = PlainTextComponentSerializer.plainText().serialize(playerMessage);
+            PlayerToNPCMessageEvent event = new PlayerToNPCMessageEvent(player, messageText, npc == null ? "Unknown" : npc.getName(), npcLocation);
+            Bukkit.getPluginManager().callEvent(event);
+        } catch (Throwable ignored) {}
+
         // Cooldown logic
         long currentTimeMillis = System.currentTimeMillis();
         if (playerCooldowns.containsKey(playerUUID)) {
@@ -173,7 +195,9 @@ public class NPCConversationManager {
 
 
     public void endConversation(UUID playerUUID) {
-        plugin.debugLog("Conversation ended for player " + playerUUID);
+        Player p = Bukkit.getPlayer(playerUUID);
+        String playerName = (p != null ? p.getName() : "UnknownPlayer");
+        plugin.debugLog("Conversation ended for player " + playerName);
 
         synchronized (npcChatStatesCache) {
             npcChatStatesCache.remove(playerUUID);
@@ -238,6 +262,12 @@ public class NPCConversationManager {
                                 public void run() {
                                     if (plugin.getActiveConversations().containsKey(playerUUID)) {
                                         conversationUtils.sendNPCMessage(player, npc, response);
+
+                                        // Log the NPC/AI response to console using player name (not UUID)
+                                        try {
+                                            String npcNameForLog = (npc != null ? npc.getName() : "Unknown");
+                                            plugin.debugLog("NPC -> Player | " + npcNameForLog + " -> " + player.getName() + ": " + response);
+                                        } catch (Throwable ignored) {}
 
                                         // Save the message if the response is a significant length
                                         List<String> relevantSentences = conversationUtils.filterShortSentences(response, ArchGPTConstants.MINIMUM_SAVED_SENTENCE_LENGTH);
