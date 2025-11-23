@@ -186,6 +186,70 @@ public class ArchGPT extends JavaPlugin {
         this.translations.loadLocales();
     }
 
+    /**
+     * Reloads the plugin's runtime configuration and all components that depend on it
+     * so that changes to knowledge/prompts and other settings take effect without a server restart.
+     */
+    public synchronized void reloadArchGPT() {
+        // 1) Reload the Bukkit config and language files
+        this.reloadConfig();
+        this.loadLanguages();
+
+        // 2) Rebuild config handler (re-computes compiled knowledge and all settings)
+        this.configHandler = new ArchGPTConfig(this);
+
+        // 3) Update logger level based on (possibly changed) debug mode
+        Level loggerLevel = configHandler.isDebugMode() ? Level.INFO : Level.WARNING;
+        getLogger().setLevel(loggerLevel);
+
+        // 4) Recreate translation service (endpoint/model may have changed)
+        String libreTranslateAPIEndpoint = getConfig().getString("translation.libre_endpoint");
+        this.translationService = new TranslationService(libreTranslateAPIEndpoint, this.getLogger());
+
+        // 5) Unregister old listeners bound to previous config/manager instances
+        if (this.npcEventListener != null) {
+            HandlerList.unregisterAll(this.npcEventListener);
+        }
+
+        // 6) Recreate conversation manager and event listener with new config
+        this.conversationManager = new NPCConversationManager(this, configHandler);
+        this.npcEventListener = new NPCEventListener(this, conversationManager, configHandler);
+        getServer().getPluginManager().registerEvents(npcEventListener, this);
+
+        // 7) Optionally rebuild DAO based on storage settings (allows switching without restart)
+        try {
+            String storageType = getConfig().getString("storage.type", "sqlite");
+            switch (storageType.toLowerCase()) {
+                case "sqlite":
+                    File sqliteFile = new File(getDataFolder(), "storage/conversations.db");
+                    conversationDAO = new SQLiteConversationDAO(sqliteFile);
+                    break;
+                case "mysql":
+                    String host = getConfig().getString("storage.mysql.host");
+                    int port = getConfig().getInt("storage.mysql.port");
+                    String database = getConfig().getString("storage.mysql.database");
+                    String username = getConfig().getString("storage.mysql.username");
+                    String password = getConfig().getString("storage.mysql.password");
+                    conversationDAO = new MySQLConversationDAO(host, port, database, username, password);
+                    break;
+            }
+        } catch (Exception e) {
+            getLogger().warning("Failed to reinitialize storage on reload. Using existing DAO. Error: " + e.getMessage());
+        }
+
+        // 8) Clear transient runtime caches that may depend on old knowledge/config
+        try {
+            playerSemaphores.clear();
+            if (contextManager != null) contextManager.clearAllContexts();
+            conversationTokenCounters.clear();
+            playerCooldowns.clear();
+            npcChatStatesCache.invalidateAll();
+        } catch (Throwable ignored) {}
+
+        // 9) Print current configuration overview to console for visibility
+        configHandler.printConfigToConsole();
+    }
+
     public void sendMessage(CommandSender sender, ComponentLike componentLike) {
         TinyTranslationsBukkit.sendMessage(sender, componentLike);
     }
